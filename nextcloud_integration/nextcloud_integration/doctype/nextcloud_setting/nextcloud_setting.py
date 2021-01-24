@@ -39,7 +39,10 @@ class NextcloudSetting(Document):
 			if isinstance(self.error_log, str):
 				error_message = self.error_log + "\n" + frappe.get_traceback()
 			else:
-				file_and_error = [" - ".join(f) for f in zip(self.failed_uploads if self.failed_uploads else '', list(set(self.error_log)))]
+				file_and_error = [
+				    " - ".join(f)
+				    for f in zip(self.failed_uploads or '', list(set(self.error_log)))
+				]
 				error_message = ("\n".join(file_and_error) + "\n" + frappe.get_traceback())
 			send_email(False, "Nextcloud", "Nextcloud Setting", "send_notifications_to", error_message)
 
@@ -96,7 +99,8 @@ class NextcloudSetting(Document):
 				self.error_log.append(_('Failed while uploading Private files'))
 
 	def prepare_backup(self):
-		odb = new_backup(ignore_files=False if self.backup_files else True, force=frappe.flags.create_new_backup)
+		odb = new_backup(
+		    ignore_files=not self.backup_files, force=frappe.flags.create_new_backup)
 		database, public, private, config = odb.get_recent_backup(older_than=24 * 30)
 		return database, config, public, private
 
@@ -120,7 +124,7 @@ class NextcloudSetting(Document):
 		if not vurl.port:
 			port = 443 if vurl.scheme == 'https' else 80
 
-		base_url = '{0}://{1}:{2}'.format(vurl.scheme, vurl.netloc, vurl.port if vurl.port else port)
+		base_url = '{0}://{1}:{2}'.format(vurl.scheme, vurl.netloc, vurl.port or port)
 		if self.webdav_url.startswith('/'):
 			base_url = '{0}{1}'.format(base_url, self.webdav_url)
 		else:
@@ -152,17 +156,14 @@ class NextcloudSetting(Document):
 			url = '{0}{1}'.format(self.upload_path, remote_fileobj)
 		else:
 			url = '{0}/{1}'.format(self.upload_path, remote_fileobj)
-		if isinstance(filebackup, str):
-			try:
+		try:
+			if isinstance(filebackup, str):
 				with open(filebackup, 'rb') as f:
 					response = self.session.request("PUT", url, allow_redirects=False, data=f)
-			except Exception as e:
-				return "Failed"
-		else:
-			try:
+			else:
 				response = self.session.request("PUT", url, allow_redirects=False, data=filebackup)
-			except Exception as e:
-				return "Failed"
+		except Exception as e:
+			return "Failed"
 		if response.status_code not in (201, 204):
 			return "Failed"
 		else:
